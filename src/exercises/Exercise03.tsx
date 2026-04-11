@@ -3,7 +3,7 @@
 // Konsep: Custom hooks, hook composition, generics
 // ============================================================
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 // ============================================================
 // 📝 HOOK 1: useLocalStorage<T>
@@ -19,10 +19,28 @@ import { useState } from 'react'
 
 function useLocalStorage<T>(_key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void] {
   // 👇 IMPLEMENTASI DI SINI
-  const [storedValue] = useState<T>(initialValue)
+  const getLocalStorage = () => {
+    try {
+      const local = localStorage.getItem(_key)
+      return local?.length ? JSON.parse(local) : initialValue
+    } catch (error) {
+      console.error(error)
+      return initialValue
+    }
+  }
+  const [storedValue, setStoredValue] = useState<T>(() => getLocalStorage())
 
   const setValue = (_value: T | ((prev: T) => T)) => {
     // TODO: update state + localStorage
+    setStoredValue((prev) => {
+      const nextValue = typeof _value === "function"
+        ? (_value as (p: T) => T)(prev)
+        : _value
+      // simpan ke state
+      const stringify = JSON.stringify(nextValue)
+      localStorage.setItem(_key, stringify)
+      return nextValue
+    })
   }
 
   return [storedValue, setValue]
@@ -40,7 +58,17 @@ function useLocalStorage<T>(_key: string, initialValue: T): [T, (value: T | ((pr
 
 function useDebounce<T>(value: T, _delay: number): T {
   // 👇 IMPLEMENTASI DI SINI
-  return value // ini salah, value seharusnya debounced
+  const [debounceVal, setDebounceValue] = useState(value)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebounceValue(value)
+    }, _delay);
+
+    return () => clearTimeout(timer)
+  }, [value, _delay])
+  
+  return debounceVal // ini salah, value seharusnya debounced
 }
 
 // ============================================================
@@ -63,11 +91,65 @@ interface FetchState<T> {
 
 function useFetch<T>(_url: string | null): FetchState<T> {
   // 👇 IMPLEMENTASI DI SINI
-  return {
+  const [res, setRes] = useState<FetchState<T>>({
     data: null,
     isLoading: false,
-    error: null,
-  }
+    error: null
+  })
+  
+  useEffect(() => {
+    const controller = new AbortController()
+    const signal = controller.signal
+    if (_url) {
+      setRes((prev) => ({
+        ...prev,
+        error: null,
+        isLoading: true,
+        data: null
+      }))
+      const fetchData = async () => {
+        try {
+          const res = await fetch(_url, {signal})
+          const result = await res.json()
+          setRes((prev) => ({
+            ...prev,
+            data: result
+          }))
+        } catch (caughtError) {
+          if (caughtError instanceof DOMException && caughtError.name === 'AbortError') {
+            return
+          }
+
+          const message =
+            caughtError instanceof Error
+              ? caughtError.message
+              : 'Terjadi kesalahan saat mengambil data'
+
+          setRes((prev) => ({
+            ...prev,
+            error: message,
+          }))
+        }
+        finally {
+          setRes((prev) => ({
+            ...prev,
+            isLoading: false,
+          }))
+        }
+      }
+      fetchData()
+    }
+    else {
+      setRes({
+        data: null,
+        isLoading: false,
+        error: null
+      })
+    }
+    return () => controller.abort()
+  }, [_url])
+
+  return res
 }
 
 // ============================================================
