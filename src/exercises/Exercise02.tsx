@@ -85,18 +85,41 @@ export default function Exercise02() {
     // Step 6: Catch — jika AbortError, abaikan. Jika error lain, set error state
     // Step 7: Return cleanup function — clear timeout, abort controller
 
-    // Hapus baris di bawah setelah implementasi:
-    console.log('TODO: implement useEffect', query)
-    void setResults
-    void setIsLoading
-    void setError
-    void setFetchCount
+    if (!query) {
+      setResults([])
+      setError(null)
+      return
+    }
+    const controller = new AbortController()
+    const signal = controller.signal
+
+    const debounceId = setTimeout(() => {
+      setIsLoading(true)
+      setError(null)
+      mockFetchUsers(query, signal).then((users) => {
+        setResults(users)
+        setIsLoading(false)
+        setFetchCount((c) => c + 1)
+      }).catch((err) => {
+        if (err.name === 'AbortError') {
+          console.log('Fetch aborted')
+        } else {
+          setError(err.message)
+          setIsLoading(false)
+        }
+      })
+    })
+
+    return () => {
+      clearTimeout(debounceId)
+      controller.abort()
+    }
   }, [query])
 
   // TODO 2: Jelaskan di komentar: mengapa useEffect dipanggil 2x
   // di Strict Mode? Apakah ini bug? Apa tujuannya?
   // Jawab:
-  //
+  // strict mode 2x bukan karena bug, tapi untuk bantu develop re render
   //
   //
 
