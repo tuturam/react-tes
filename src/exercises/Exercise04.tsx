@@ -4,7 +4,7 @@
 //         state colocation, lifting state up
 // ============================================================
 
-import { createContext, useContext, useReducer, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useReducer, useEffect, type ReactNode, useState } from 'react'
 
 // ============================================================
 // 📝 PART 1: THEME CONTEXT
@@ -36,10 +36,19 @@ function useTheme(): ThemeContextType {
 // TODO 4: Implementasi ThemeProvider
 function ThemeProvider({ children }: { children: ReactNode }) {
   // 👇 IMPLEMENTASI: state management untuk theme
+  const [theme, setTheme] = useState<Theme>(() => {
+    return (localStorage.getItem('theme') as Theme) || 'light'
+  })
   // Bonus: simpan preference ke localStorage
-  const _theme: Theme = 'dark'
+  const _theme: Theme = theme
   const _toggleTheme = () => {
     // TODO: toggle antara 'dark' dan 'light'
+    setTheme((prev) => {
+      const nextTime = prev === 'dark' ? 'light' : 'dark'
+
+      localStorage.setItem('theme', nextTime)
+      return nextTime
+    })
   }
 
   return (
@@ -67,12 +76,22 @@ interface NotificationContextType {
 }
 
 // TODO 5: Definisikan Action type untuk notification reducer
-type NotificationAction = never // 👈 GANTI: discriminated union ADD | REMOVE
+type NotificationAction = 
+  | { type: 'ADD', payload: Notification } 
+  | { type: 'REMOVE', payload: { id: string } } 
+  // 👈 GANTI: discriminated union ADD | REMOVE
 
 // TODO 6: Implementasi notificationReducer
 function notificationReducer(state: Notification[], action: NotificationAction): Notification[] {
   console.log(action) // hapus setelah implementasi
-  return state
+  switch (action.type) {
+    case 'ADD': 
+      return [...state, action.payload]
+    case 'REMOVE':
+      return state.filter((state) => state.id !== action.payload.id)
+    default:
+      return state
+  }
 }
 
 // TODO 7: Buat NotificationContext
@@ -95,17 +114,47 @@ function NotificationProvider({ children }: { children: ReactNode }) {
   const addNotification = (_message: string, _type: Notification['type']) => {
     // TODO: dispatch ADD action
     console.log(dispatch) // hapus setelah implementasi
+    dispatch({
+      type: 'ADD',
+      payload: {
+        createdAt: Date.now(),
+        id: crypto.randomUUID(),
+        message: _message,
+        type: 'success'
+      }
+    })
   }
 
   const removeNotification = (_id: string) => {
     // TODO: dispatch REMOVE action
+    dispatch({
+      type: 'REMOVE',
+      payload: {
+        id: _id,
+      }
+    })
   }
 
-  // TODO 9: useEffect untuk auto-dismiss setelah 3 detik
   useEffect(() => {
-    // 👇 IMPLEMENTASI: untuk setiap notification, set timeout 3 detik lalu remove
-    // Cleanup: clear semua timeouts
-  }, [notifications])
+    // Array untuk simpan timeout IDs (buat bisa di-clear nanti)
+    const timeoutIds: ReturnType<typeof setTimeout>[] = []
+    
+    // Loop setiap notifikasi
+    notifications.forEach((notification) => {
+      // Set timeout 3 detik
+      const timeoutId = setTimeout(() => {
+        removeNotification(notification.id)
+      }, 3000) // 3000 ms = 3 detik
+      
+      timeoutIds.push(timeoutId)
+    })
+
+    // Cleanup function — clear semua timeout
+    // Dipanggil saat: dependencies berubah ATAU component unmount
+    return () => {
+      timeoutIds.forEach(id => clearTimeout(id))
+    }
+  }, [notifications, removeNotification])
 
   return (
     <NotificationContext.Provider
